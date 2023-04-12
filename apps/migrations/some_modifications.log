@@ -1,0 +1,22 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/go_bindata"
+)
+
+func main() {
+	dbURL := "postgres://user:password@host:port/agroport_db"
+	m, err := migrate.NewWithDatabaseInstance("go-bindata", dbURL, "postgres")
+	if err != nil {
+		fmt.Println("Migrations initialization error occurred.")
+	}
+
+	err = m.Up()
+	if err != nil {
+		fmt.Println("Migrations execution error occurrred.")
+	}
+}
