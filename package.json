@@ -9,6 +9,10 @@
   "author": "Doan Isakov",
   "license": "ISC",
   "devDependencies": {
+    "@nrwl/devkit": "^15.9.2",
     "nx": "^15.9.2"
+  },
+  "dependencies": {
+    "@nx-go/nx-go": "^2.7.0"
   }
 }

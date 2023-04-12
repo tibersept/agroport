@@ -1,4 +1,7 @@
 {
+  "implicitDependencies": {
+    "go.mod": "*"
+  },
   "tasksRunnerOptions": {
     "default": {
       "runner": "nx/tasks-runners/default",
