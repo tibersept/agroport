@@ -1,6 +1,9 @@
-This project uses:
- 
- - AWS for hosting
- - PostgreSQL as a database
- - Go Lambdas for backend services
- 
+Agroport REST API
+=================
+
+Uses:
+
+    - Go for the service layer
+    - PostgreSQL for the data layer
+
+Currently hosted on Railway.
