@@ -270,7 +270,7 @@ func GetSchedules() ([]Schedule, error) {
 	query := `SELECT s.id, s.worker_id, s.date, s.created_at, s.updated_at, w.name
 			  FROM schedules s
 			  LEFT JOIN workers w ON s.worker_id = w.id
-			  ORDER BY s.date DESC, s.start_time`
+			  ORDER BY s.date DESC`
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func GetWorkerSchedules(workerID int) ([]Schedule, error) {
 			  FROM schedules s
 			  LEFT JOIN workers w ON s.worker_id = w.id
 			  WHERE s.worker_id = $1
-			  ORDER BY s.date DESC, s.start_time`
+			  ORDER BY s.date DESC`
 	rows, err := db.Query(query, workerID)
 	if err != nil {
 		return nil, err
