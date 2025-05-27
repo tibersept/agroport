@@ -42,7 +42,7 @@ type Schedule struct {
 
 type Operation struct {
 	ID          int        `json:"id"`
-	ScheduleID  int        `json:"schedule_id"`
+	ScheduleID  *int       `json:"schedule_id"`
 	WorkerID    int        `json:"worker_id"`
 	FieldID     int        `json:"field_id"`
 	Type        string     `json:"type"` // "plowing", "seeding", "harvesting", etc.
@@ -136,7 +136,7 @@ func RunMigrations() error {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_schedules_worker_date ON schedules(worker_id, date)`,
-		`CREATE INDEX IF NOT EXISTS idx_operations_schedule ON operations(schedule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_schedule ON operations(schedule_id) WHERE schedule_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_worker ON operations(worker_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_field ON operations(field_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_worker_date ON operations(worker_id, DATE(start_time))`,
