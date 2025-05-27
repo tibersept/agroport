@@ -269,13 +269,9 @@ func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if schedule.WorkerID == 0 || schedule.FieldID == 0 {
+	if schedule.WorkerID == 0 {
 		h.respondWithError(w, http.StatusBadRequest, "Worker ID and Field ID are required")
 		return
-	}
-
-	if schedule.Status == "" {
-		schedule.Status = "planned"
 	}
 
 	if err := models.CreateSchedule(&schedule); err != nil {

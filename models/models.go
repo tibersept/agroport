@@ -23,8 +23,10 @@ type Field struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Coordinates json.RawMessage `json:"coordinates"` // GeoJSON polygon
-	Area        float64         `json:"area"`        // in hectares
+	Area        float64         `json:"area"`        // in decares
 	CropType    string          `json:"crop_type"`
+	Period      string          `json:"period"` // the period of operation
+	Region      string          `json:"region"` // region name
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -32,16 +34,10 @@ type Field struct {
 type Schedule struct {
 	ID        int       `json:"id"`
 	WorkerID  int       `json:"worker_id"`
-	FieldID   int       `json:"field_id"`
 	Date      time.Time `json:"date"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-	Status    string    `json:"status"` // "planned", "in_progress", "completed", "cancelled"
-	Notes     string    `json:"notes"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Worker    *Worker   `json:"worker,omitempty"`
-	Field     *Field    `json:"field,omitempty"`
 }
 
 type Operation struct {
@@ -51,7 +47,7 @@ type Operation struct {
 	FieldID     int        `json:"field_id"`
 	Type        string     `json:"type"` // "plowing", "seeding", "harvesting", etc.
 	Description string     `json:"description"`
-	Status      string     `json:"status"` // "planned", "in_progress", "completed"
+	Status      string     `json:"status"` // "planned", "in_progress", "completed", "cancelled"
 	StartTime   time.Time  `json:"start_time"`
 	EndTime     *time.Time `json:"end_time"`
 	CompletedAt *time.Time `json:"completed_at"`
@@ -111,19 +107,16 @@ func RunMigrations() error {
 			description TEXT,
 			coordinates JSONB NOT NULL,
 			area DECIMAL(10,2) DEFAULT 0,
-			crop_type VARCHAR(100),
+			crop_type VARCHAR(100) NOT NULL,
+			perdiod VARCHAR(100) NOT NULL,
+			region VARCHAR(255) NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS schedules (
 			id SERIAL PRIMARY KEY,
 			worker_id INTEGER REFERENCES workers(id) ON DELETE CASCADE,
-			field_id INTEGER REFERENCES fields(id) ON DELETE CASCADE,
 			date DATE NOT NULL,
-			start_time TIMESTAMP NOT NULL,
-			end_time TIMESTAMP NOT NULL,
-			status VARCHAR(50) DEFAULT 'planned',
-			notes TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -143,7 +136,9 @@ func RunMigrations() error {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_schedules_worker_date ON schedules(worker_id, date)`,
-		`CREATE INDEX IF NOT EXISTS idx_schedules_field_date ON schedules(field_id, date)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_schedule ON operations(schedule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_worker ON operations(worker_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operations_field ON operations(field_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_worker_date ON operations(worker_id, DATE(start_time))`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_field_date ON operations(field_id, DATE(start_time))`,
 		`CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status)`,
@@ -212,15 +207,15 @@ func DeleteWorker(id int) error {
 
 // Field methods
 func CreateField(field *Field) error {
-	query := `INSERT INTO fields (name, description, coordinates, area, crop_type)
-			  VALUES ($1, $2, $3, $4, $5)
+	query := `INSERT INTO fields (name, description, coordinates, area, crop_type, period, region)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7)
 			  RETURNING id, created_at, updated_at`
-	return db.QueryRow(query, field.Name, field.Description, field.Coordinates, field.Area, field.CropType).
+	return db.QueryRow(query, field.Name, field.Description, field.Coordinates, field.Area, field.CropType, field.Period, field.Region).
 		Scan(&field.ID, &field.CreatedAt, &field.UpdatedAt)
 }
 
 func GetFields() ([]Field, error) {
-	query := `SELECT id, name, description, coordinates, area, crop_type, created_at, updated_at FROM fields ORDER BY name`
+	query := `SELECT id, name, description, coordinates, area, crop_type, period, region, created_at, updated_at FROM fields ORDER BY name`
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -230,7 +225,7 @@ func GetFields() ([]Field, error) {
 	var fields []Field
 	for rows.Next() {
 		var f Field
-		err := rows.Scan(&f.ID, &f.Name, &f.Description, &f.Coordinates, &f.Area, &f.CropType, &f.CreatedAt, &f.UpdatedAt)
+		err := rows.Scan(&f.ID, &f.Name, &f.Description, &f.Coordinates, &f.Area, &f.CropType, &f.Period, &f.Region, &f.CreatedAt, &f.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -241,8 +236,8 @@ func GetFields() ([]Field, error) {
 
 func GetFieldByID(id int) (*Field, error) {
 	var f Field
-	query := `SELECT id, name, description, coordinates, area, crop_type, created_at, updated_at FROM fields WHERE id = $1`
-	err := db.QueryRow(query, id).Scan(&f.ID, &f.Name, &f.Description, &f.Coordinates, &f.Area, &f.CropType, &f.CreatedAt, &f.UpdatedAt)
+	query := `SELECT id, name, description, coordinates, area, crop_type, period, region, created_at, updated_at FROM fields WHERE id = $1`
+	err := db.QueryRow(query, id).Scan(&f.ID, &f.Name, &f.Description, &f.Coordinates, &f.Area, &f.CropType, &f.Period, &f.Region, &f.CreatedAt, &f.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -250,9 +245,9 @@ func GetFieldByID(id int) (*Field, error) {
 }
 
 func UpdateField(field *Field) error {
-	query := `UPDATE fields SET name = $1, description = $2, coordinates = $3, area = $4, crop_type = $5, updated_at = CURRENT_TIMESTAMP
-			  WHERE id = $6 RETURNING updated_at`
-	return db.QueryRow(query, field.Name, field.Description, field.Coordinates, field.Area, field.CropType, field.ID).
+	query := `UPDATE fields SET name = $1, description = $2, coordinates = $3, area = $4, crop_type = $5, period = $6, region = $7, updated_at = CURRENT_TIMESTAMP
+			  WHERE id = $8 RETURNING updated_at`
+	return db.QueryRow(query, field.Name, field.Description, field.Coordinates, field.Area, field.CropType, field.Period, field.Region, field.ID).
 		Scan(&field.UpdatedAt)
 }
 
@@ -264,20 +259,17 @@ func DeleteField(id int) error {
 
 // Schedule methods
 func CreateSchedule(schedule *Schedule) error {
-	query := `INSERT INTO schedules (worker_id, field_id, date, start_time, end_time, status, notes)
-			  VALUES ($1, $2, $3, $4, $5, $6, $7)
+	query := `INSERT INTO schedules (worker_id, date)
+			  VALUES ($1, $2)
 			  RETURNING id, created_at, updated_at`
-	return db.QueryRow(query, schedule.WorkerID, schedule.FieldID, schedule.Date, schedule.StartTime,
-		schedule.EndTime, schedule.Status, schedule.Notes).
+	return db.QueryRow(query, schedule.WorkerID, schedule.Date).
 		Scan(&schedule.ID, &schedule.CreatedAt, &schedule.UpdatedAt)
 }
 
 func GetSchedules() ([]Schedule, error) {
-	query := `SELECT s.id, s.worker_id, s.field_id, s.date, s.start_time, s.end_time, s.status, s.notes, s.created_at, s.updated_at,
-					 w.name, f.name
+	query := `SELECT s.id, s.worker_id, s.date, s.created_at, s.updated_at, w.name
 			  FROM schedules s
 			  LEFT JOIN workers w ON s.worker_id = w.id
-			  LEFT JOIN fields f ON s.field_id = f.id
 			  ORDER BY s.date DESC, s.start_time`
 	rows, err := db.Query(query)
 	if err != nil {
@@ -288,17 +280,13 @@ func GetSchedules() ([]Schedule, error) {
 	var schedules []Schedule
 	for rows.Next() {
 		var s Schedule
-		var workerName, fieldName sql.NullString
-		err := rows.Scan(&s.ID, &s.WorkerID, &s.FieldID, &s.Date, &s.StartTime, &s.EndTime, &s.Status, &s.Notes,
-			&s.CreatedAt, &s.UpdatedAt, &workerName, &fieldName)
+		var workerName sql.NullString
+		err := rows.Scan(&s.ID, &s.WorkerID, &s.Date, &s.CreatedAt, &s.UpdatedAt, &workerName)
 		if err != nil {
 			return nil, err
 		}
 		if workerName.Valid {
 			s.Worker = &Worker{ID: s.WorkerID, Name: workerName.String}
-		}
-		if fieldName.Valid {
-			s.Field = &Field{ID: s.FieldID, Name: fieldName.String}
 		}
 		schedules = append(schedules, s)
 	}
@@ -307,33 +295,25 @@ func GetSchedules() ([]Schedule, error) {
 
 func GetScheduleByID(id int) (*Schedule, error) {
 	var s Schedule
-	query := `SELECT s.id, s.worker_id, s.field_id, s.date, s.start_time, s.end_time, s.status, s.notes, s.created_at, s.updated_at,
-					 w.name, f.name
+	query := `SELECT s.id, s.worker_id, s.date, s.created_at, s.updated_at, w.name
 			  FROM schedules s
 			  LEFT JOIN workers w ON s.worker_id = w.id
-			  LEFT JOIN fields f ON s.field_id = f.id
 			  WHERE s.id = $1`
-	var workerName, fieldName sql.NullString
-	err := db.QueryRow(query, id).Scan(&s.ID, &s.WorkerID, &s.FieldID, &s.Date, &s.StartTime, &s.EndTime, &s.Status, &s.Notes,
-		&s.CreatedAt, &s.UpdatedAt, &workerName, &fieldName)
+	var workerName sql.NullString
+	err := db.QueryRow(query, id).Scan(&s.ID, &s.WorkerID, &s.Date, &s.CreatedAt, &s.UpdatedAt, &workerName)
 	if err != nil {
 		return nil, err
 	}
 	if workerName.Valid {
 		s.Worker = &Worker{ID: s.WorkerID, Name: workerName.String}
 	}
-	if fieldName.Valid {
-		s.Field = &Field{ID: s.FieldID, Name: fieldName.String}
-	}
 	return &s, nil
 }
 
 func GetWorkerSchedules(workerID int) ([]Schedule, error) {
-	query := `SELECT s.id, s.worker_id, s.field_id, s.date, s.start_time, s.end_time, s.status, s.notes, s.created_at, s.updated_at,
-					 w.name, f.name
+	query := `SELECT s.id, s.worker_id, s.date, s.created_at, s.updated_at, w.name
 			  FROM schedules s
 			  LEFT JOIN workers w ON s.worker_id = w.id
-			  LEFT JOIN fields f ON s.field_id = f.id
 			  WHERE s.worker_id = $1
 			  ORDER BY s.date DESC, s.start_time`
 	rows, err := db.Query(query, workerID)
@@ -345,17 +325,13 @@ func GetWorkerSchedules(workerID int) ([]Schedule, error) {
 	var schedules []Schedule
 	for rows.Next() {
 		var s Schedule
-		var workerName, fieldName sql.NullString
-		err := rows.Scan(&s.ID, &s.WorkerID, &s.FieldID, &s.Date, &s.StartTime, &s.EndTime, &s.Status, &s.Notes,
-			&s.CreatedAt, &s.UpdatedAt, &workerName, &fieldName)
+		var workerName sql.NullString
+		err := rows.Scan(&s.ID, &s.WorkerID, &s.Date, &s.CreatedAt, &s.UpdatedAt, &workerName)
 		if err != nil {
 			return nil, err
 		}
 		if workerName.Valid {
 			s.Worker = &Worker{ID: s.WorkerID, Name: workerName.String}
-		}
-		if fieldName.Valid {
-			s.Field = &Field{ID: s.FieldID, Name: fieldName.String}
 		}
 		schedules = append(schedules, s)
 	}
@@ -363,11 +339,9 @@ func GetWorkerSchedules(workerID int) ([]Schedule, error) {
 }
 
 func UpdateSchedule(schedule *Schedule) error {
-	query := `UPDATE schedules SET worker_id = $1, field_id = $2, date = $3, start_time = $4, end_time = $5,
-			  status = $6, notes = $7, updated_at = CURRENT_TIMESTAMP
-			  WHERE id = $8 RETURNING updated_at`
-	return db.QueryRow(query, schedule.WorkerID, schedule.FieldID, schedule.Date, schedule.StartTime,
-		schedule.EndTime, schedule.Status, schedule.Notes, schedule.ID).
+	query := `UPDATE schedules SET worker_id = $1, date = $2, updated_at = CURRENT_TIMESTAMP
+			  WHERE id = $3 RETURNING updated_at`
+	return db.QueryRow(query, schedule.WorkerID, schedule.Date, schedule.ID).
 		Scan(&schedule.UpdatedAt)
 }
 
