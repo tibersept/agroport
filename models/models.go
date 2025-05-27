@@ -108,7 +108,7 @@ func RunMigrations() error {
 			coordinates JSONB NOT NULL,
 			area DECIMAL(10,2) DEFAULT 0,
 			crop_type VARCHAR(100) NOT NULL,
-			perdiod VARCHAR(100) NOT NULL,
+			period VARCHAR(100) NOT NULL,
 			region VARCHAR(255) NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
