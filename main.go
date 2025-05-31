@@ -91,6 +91,7 @@ func setupRoutes(r *mux.Router, h *handlers.Handler) {
 	api.HandleFunc("/operations/{id}", h.UpdateOperation).Methods("PUT")
 	api.HandleFunc("/operations/{id}", h.DeleteOperation).Methods("DELETE")
 	api.HandleFunc("/operations/{id}/complete", h.CompleteOperation).Methods("POST")
+	api.HandleFunc("/operations/{id}/start", h.StartOperation).Methods("POST")
 
 	// Reports endpoints
 	api.HandleFunc("/reports/daily", h.GetDailyReport).Methods("GET")

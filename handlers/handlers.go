@@ -503,6 +503,24 @@ func (h *Handler) CompleteOperation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) StartOperation(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid operation ID")
+		return
+	}
+
+	if err := models.StartOperation(id); err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to start operation")
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, SuccessResponse{
+		Message: "Operation started successfully",
+	})
+}
+
 func (h *Handler) DeleteOperation(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])

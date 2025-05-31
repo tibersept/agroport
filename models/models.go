@@ -48,7 +48,7 @@ type Operation struct {
 	Type        string     `json:"type"` // "plowing", "seeding", "harvesting", etc.
 	Description string     `json:"description"`
 	Status      string     `json:"status"` // "planned", "in_progress", "completed", "cancelled"
-	StartTime   time.Time  `json:"start_time"`
+	StartTime   *time.Time `json:"start_time"`
 	EndTime     *time.Time `json:"end_time"`
 	CompletedAt *time.Time `json:"completed_at"`
 	Notes       string     `json:"notes"`
@@ -430,6 +430,13 @@ func UpdateOperation(operation *Operation) error {
 
 func CompleteOperation(id int) error {
 	query := `UPDATE operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+			  WHERE id = $1`
+	_, err := db.Exec(query, id)
+	return err
+}
+
+func StartOperation(id int) error {
+	query := `UPDATE operations SET status = 'in_progress', start_time = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
 			  WHERE id = $1`
 	_, err := db.Exec(query, id)
 	return err
