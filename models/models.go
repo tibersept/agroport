@@ -128,7 +128,7 @@ func RunMigrations() error {
 			type VARCHAR(100) NOT NULL,
 			description TEXT,
 			status VARCHAR(50) DEFAULT 'planned',
-			start_time TIMESTAMP NOT NULL,
+			start_time TIMESTAMP,
 			end_time TIMESTAMP,
 			completed_at TIMESTAMP,
 			notes TEXT,
@@ -437,6 +437,13 @@ func CompleteOperation(id int) error {
 
 func StartOperation(id int) error {
 	query := `UPDATE operations SET status = 'in_progress', start_time = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+			  WHERE id = $1`
+	_, err := db.Exec(query, id)
+	return err
+}
+
+func RejectOperation(id int) error {
+	query := `UPDATE operations SET worker_id = NULL, schedule_id = NULL updated_at = CURRENT_TIMESTAMP
 			  WHERE id = $1`
 	_, err := db.Exec(query, id)
 	return err

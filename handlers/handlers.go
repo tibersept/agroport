@@ -521,6 +521,24 @@ func (h *Handler) StartOperation(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) RejectOperation(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid operation ID")
+		return
+	}
+
+	if err := models.RejectOperation(id); err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to reject operation")
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, SuccessResponse{
+		Message: "Operation rejected successfully",
+	})
+}
+
 func (h *Handler) DeleteOperation(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
